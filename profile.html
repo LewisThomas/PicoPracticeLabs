@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Lab 5</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lora">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+  <script type="text/ecmascript" src="/config.js"></script>
+  <script type="text/ecmascript" src="/profileScript.js"></script>
+</head>
+
+<body class="center">
+  <h1>Lab 5 TA example SPA</h1>
+
+  <nav>
+    <ul>
+      <li><a href="index.html">Data</a></li>
+      <li><a class="active" href="profile.html">Profile</a></li>
+    </ul>
+  </nav>
+
+  <h3>Current Sensor Name:</h3>
+  <div id="name"></div>
+  <form>
+    <input id="newName" type="text" placeholder="New name"/>
+    <input id="setName" type="submit" value="Change"/>
+  </form>
+
+  <h3>Current Sensor Location:</h3>
+  <div id="location"></div>
+  <form>
+    <input id="newlocation" type="text" placeholder="New location"/>
+    <input id="setLocation" type="submit" value="Change"/>
+  </form>
+
+  <h3>Current Contact Number (do not provide the '+'):</h3>
+  <div id="contact"></div>
+  <form>
+    <input id="newContact" type="text" placeholder="ex. 18002241323"/>
+    <input id="setContact" type="submit" value="Change"/>
+  </form>
+
+  <h3>Current Temperature Threshold:</h3>
+  <div id="threshold"></div>
+  <form>
+    <input id="newThreshold" type="text" placeholder="100"/>
+    <input id="setThreshold" type="submit" value="Change"/>
+  </form>
+
+</body>
+
+
+
+</html>

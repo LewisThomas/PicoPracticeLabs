@@ -1,0 +1,41 @@
+body {
+  font-family: 'Lora', serif;
+}
+
+.center {
+  text-align: center;
+  width: 70%;
+  margin: auto
+}
+
+
+nav {
+  text-align: center;
+}
+
+nav ul {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+nav li {
+  display: inline;
+}
+
+nav li a {
+  display: inline-block;
+  color: #4B0082;
+  text-align: center;
+  padding: 14px 16px;
+  text-decoration: none;
+}
+
+nav li a:hover {
+  background-color: none;
+}
+
+.active {
+  background-color: none;
+}

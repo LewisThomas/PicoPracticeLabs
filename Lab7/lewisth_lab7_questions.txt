@@ -1,0 +1,29 @@
+1. Why might an auto-approval rule for subscriptions be considered insecure? 
+Any pico or malicious actor could acquire a subscription with that pico and could do many things if the channel the subscription creates allows it, or they could even
+overflow the pico with subscriptions and perform an attack that overflows the memory of the pico-engine (picos have no limit on how many subscriptions they can have)
+
+2. Can you put a sensor pico in more than one sensor management pico (i.e. can it have subscriptions to more than one sensor management pico)? 
+Yes, of course.
+
+3. Imagine I have sensor types besides temperature sensors (e.g. pressure, humidity, air quality, etc.). How would you properly manage collections of sensors that include heterogeneous sensor types? 
+There are several different ways I might choose to do this. I could have different types of subscription roles depending on the sensor type the manager is subscribed to.
+I could alo provide a uniform API function, like "get_sensor_data" in each type of sensor that the sensor manager simply queries. and the function returns certain guaranteed data then 
+maybe some sensor specific data.
+
+4. Describe how you'd use the techniques from this lesson to create collections of temperature sensors in particular rooms or areas of a building. For example, I would still have the sensor management pico, but might have collections for each floor in a building.
+I could group the subscriptions that I made to the sensor picos by their location. Part of the subscription process could include asking the sensor for its location, and then sorting it into
+a group in an entity variable in the manager pico in some way.
+
+5. Can a sensor pico belong to more than one collection? After the modifications of this lab, if a sensor belonged to more than one collection and had a threshold violation, what would happen? 
+Yes of course. If a sensor belonged to more than one manager and had a violation, it would notify all managers it was subscribed to, which would both subsequently send an SMS according
+to their own settings.
+
+6. When you moved threshold violation notifications from the sensor to the management ruleset, did you add the rules to an existing ruleset or create a new one? Why? 
+I put the rule responding to that notification event in the profile ruleset we were supposed to create, mostly for simplicity of the code. That profile ruleset is 
+specfically for managing temperature sensors, so I think it is fine for it to respond to temperature threshold violations within it.
+
+7. When you moved threshold violation notifications from the sensor to the management ruleset, did you add only one rule or more than one rule to achieve this end? Which rules did you add and why (i.e. justify the architectural decisions did you made)?
+I added only one rule, a response to the threshold_violation event that the sensor picos would send to the manager pico. 
+The result is realistically about 4 lines of code to achieve the desired result.
+Because the picos are acting in a cooperative manner, I can expect the message to be formatted in a specific way, and as such I only need one rule to respond to
+the sensor picos. This does imply that the sensor picos have to follow the API of the sensor manager, but that has to happen anyway.
