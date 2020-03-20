@@ -1,6 +1,6 @@
 ruleset manage_sensors {
   meta {
-    shares __testing, sensors, retrieveAllTemperatureData,children, establishedSubscriptions,reports
+    shares __testing, sensors, retrieveAllTemperatureData,children, establishedSubscriptions, getReports
     
     use module io.picolabs.wrangler alias wrangler
     use module io.picolabs.subscription alias subscription
@@ -11,33 +11,33 @@ ruleset manage_sensors {
                                {"name":"retrieveAllTemperatureData"},
                                {"name":"children"},
                                {"name":"establishedSubscriptions"},
-                               {"name":"reports"}
+                               {"name":"getReports"}
                              ],
-                            "events": [
-                              {
-                                "domain":"sensor",
-                                "type":"new_sensor",
-                                "attrs":["sensor_name"]
-                              },
-                              {
-                                "domain":"collection",
-                                "type":"empty"
-                              },
-                              {
-                                "domain":"sensor",
-                                "type":"unneeded_sensor",
-                                "attrs":["sensor_name"]
-                              },
-                              {
-                                "domain":"sensor",
-                                "type":"friendly_sensor_subscription",
-                                "attrs":["name","sensor_role","wellKnown_Tx"]
-                              },
-                              {
-                                "domain":"sensor",
-                                "type":"generate_report"
-                              }
-                            ] }
+                  "events": [
+                    {
+                      "domain":"sensor",
+                      "type":"new_sensor",
+                      "attrs":["sensor_name"]
+                    },
+                    {
+                      "domain":"collection",
+                      "type":"empty"
+                    },
+                    {
+                      "domain":"sensor",
+                      "type":"ask_for_reports"
+                    },
+                    {
+                      "domain":"sensor",
+                      "type":"unneeded_sensor",
+                      "attrs":["sensor_name"]
+                    },
+                    {
+                      "domain":"sensor",
+                      "type":"friendly_sensor_subscription",
+                      "attrs":["name","sensor_role","wellKnown_Tx"]
+                    }
+                    ] }
     def_receiving_number = "17609945971"
     def_threshold = 90
     def_location = "PicoLabs"
@@ -46,20 +46,14 @@ ruleset manage_sensors {
       ent:sensors
     }
     
-    reports = function() {
-      reports_array = ent:reports.values();
-      (reports_array.length()) <= 5 =>
-      reports_array |
-      reports_array.slice((reports_array.length() - 5), reports_array.length() - 1)
-    }
-    
     nameFromID = function(id) {
       "TempSensor " + id
     }
     
     nameFromSubID = function(sub_id) {
       sensor_name = ent:sensors.filter(function(v,k) {
-        v{["subscription_id"]} == sub_id
+        v{["subscription_id"]} == sub_id.klog("filtering sub ID")
+        // v.klog("filtering on sensors got this")
       }).klog("filtered list: ").keys()[0];
       sensor_name
     }
@@ -88,6 +82,10 @@ ruleset manage_sensors {
           wrangler:skyQuery(eci, "temperature_store","current_temperature")
       });
     }
+
+    getReports = function() {
+      ent:reports.defaultsTo([]).reverse().slice(ent:reports.length() > 4 => 4 | ent:reports.length())
+    }
     
   }
   /*
@@ -100,6 +98,44 @@ ruleset manage_sensors {
     Rules that create the sensor as a child, install the requisite rulesets into it, and then initialize its profile with default values. The sensor name is stored in the
     entity variable ent:sensors for identifying sensors by their subscription.
   */
+
+  rule getReports {
+    select when sensor ask_for_reports
+    pre {
+      reportID = random:uuid()
+      temperatureSensors = ent:sensors
+    }
+    always {
+      ent:reports := ent:reports.defaultsTo([]).append([{
+        "report_id":reportID,
+        "temperature_sensors":temperatureSensors.length(),
+        "responding":0,
+        "temperatures": []
+      }])
+      raise wrangler event "send_event_on_subs" attributes {
+        "domain":"sensor",
+        "type":"manager_wants_report",
+        "attrs":{
+          "report_id":  reportID
+        },
+        "Tx_role":"temperature_sensor"
+      }
+    }
+  }
+
+  rule receiveReport {
+    select when sensor report_received
+    pre {
+      sensors_report = event:attr("report")
+      reportID = event:attr("report_id")
+    }
+    always {
+      ent:reports := ent:reports.map(function(report){
+        report{"report_id"} != reportID => report | report.set(["responding"], report{"responding"} + 1)
+                                                          .set(["temperatures"], report{"temperatures"}.append(sensors_report))
+      })
+    }
+  }
   
   rule create_sensor {
     select when sensor new_sensor
@@ -124,7 +160,7 @@ ruleset manage_sensors {
     select when wrangler child_initialized
       pre {
         the_sensor_pico = {"id":event:attr("id"), "eci":event:attr("eci")}
-        sensor_name = event:attr("rs_attrs"){"sensor_name"}
+        sensor_name = event:attrs{"sensor_name"}
       }
       if sensor_name
       then
@@ -140,15 +176,15 @@ ruleset manage_sensors {
       fired {
         raise sensor event "new_sensor_created" attributes event:attrs;
         ent:sensors := ent:sensors.defaultsTo({});
-        ent:sensors{[sensor_name]} := the_sensor_pico;
-        }
+        ent:sensors{[sensor_name]} := the_sensor_pico
+      }
       
   }
   
   rule initialize_profile {
     select when wrangler child_initialized
     pre {
-      sensor_name = event:attr("rs_attrs"){"sensor_name"}
+      sensor_name = event:attrs{"sensor_name"}
       the_sensor_pico = ent:sensors{sensor_name}.klog("sensor_pico: ")
     }
     event:send({
@@ -173,7 +209,7 @@ ruleset manage_sensors {
     select when sensor new_sensor_created
     pre {
         the_sensor_pico = {"id":event:attr("id"), "eci":event:attr("eci")}
-        sensor_name = event:attr("rs_attrs"){"sensor_name"}
+        sensor_name = event:attrs{"sensor_name"}
     }
     if sensor_name
     then
@@ -191,17 +227,15 @@ ruleset manage_sensors {
   }
   
   rule record_subscription_id {
-    select when wrangler pending_subscription
+    select when wrangler subscription_added 
     pre {
       sub_id = event:attr("Id")
-      //sensor_type = event:attr("sensor_type")
       name = event:attr("name").replace(re#TempSensor #, "")
       //substr(11) == "TempSensor " => event:attr("name").substr(11) | event:attr("name")
     }
-    noop()//send_directive("PENDING_SUB", event:attrs.klog("EVENT ATTRIBUTES"))
+    noop()
     always {
-      ent:sensors{[name, "subscription_id"]} := sub_id;
-      //ent:sensors{[name,"sensor_type"]} := sensor_type
+      ent:sensors{[name, "subscription_id"]} := sub_id
     }
   }
   
@@ -219,7 +253,7 @@ ruleset manage_sensors {
       channel_type = "subscription"
       wellknown_Tx = event:attr("wellKnown_Tx")
     }
-    if wellknown_Tx && sensor_role && name then
+    if wellknown_Tx && sensor_role == "temperature_sensor" && name then
     noop()
     //send_directive("hey", {"wellknown":wellknown_Tx, "name":name})
     fired {
@@ -229,8 +263,7 @@ ruleset manage_sensors {
         "Rx_role": rx_role,
         "Tx_role":tx_role,
         "channel_type":channel_type,
-        "wellKnown_Tx":wellknown_Tx,
-        "sensor_role":sensor_role
+        "wellKnown_Tx":wellknown_Tx
         }
         
     }
@@ -299,69 +332,5 @@ ruleset manage_sensors {
       ent:sensors := {}
     }
   }
-  
-  
-  
-  
-  
-  
-  
-  
-  rule get_reports {
-    select when sensor generate_report
-    foreach subscription:established().filter(function(value) {
-          value{"Tx_role"} == "temperature_sensor"
-        }) setting (sub_entry)
-      pre {
-        //receiving_number = sensor_profile:get_receiving_number()
-        eci = sub_entry{"Tx"}//.klog("ECI IS BOI")
-      }
-      //if not (event:attr("report_id").klog("reportID::") >< ent:reports) then
-      event:send({
-      "eci":eci,
-      "eid":"report_request",
-      "domain":"sensor",
-      "type":"report_requested",
-      "attrs": {
-        "report_id": ent:report_number.defaultsTo(0),
-        "Tx":sub_entry{"Rx"}
-      }
-      })
-     // twilio:send_sms(receiving_number, sending_number, "Temperature threshold violation reached: " + event:attr("temperature") + " degrees F") setting (response)
-      fired {
-        ent:report_number := ent:report_number.defaultsTo(0) + 1 on final
-      }
-      else {
-        klog("Invalid report ID")
-      }
-      
-    
-  }
-  
-  
-  rule generate_report {
-    select when sensor report_sent
-    pre {
-      Rx = event:attr("Rx")
-      report = event:attr("report")
-      //report_id = event:attr("report_id")
-      sensor_type = event:attr("sensor_type")
-      temperature_report = [Rx, report]
-      test = event:attrs.klog("HEYO: ")
-      report_id = ent:report_number.defaultsTo(0);
-    }
-    if not ent:reports then
-    noop()
-    fired {
-      ent:reports := {};
-      //ent:report_number := 0;
-    }
-    finally {
-      ent:reports{[report_id]} := {
-        "temperature_sensors":ent:sensors.length(),
-        "responding":ent:reports{[report_id,"responding"]}.defaultsTo(0) + 1,
-        "temperatures":ent:reports{[report_id,"temperatures"]}.defaultsTo([]).append(temperature_report)
-      };
-    }
-  }
 }
+

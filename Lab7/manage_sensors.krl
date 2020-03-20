@@ -76,6 +76,10 @@ ruleset manage_sensors {
           wrangler:skyQuery(eci, "temperature_store","current_temperature")
       });
     }
+
+    getReports = function() {
+      ent:reports.reverse().slice(5)
+    }
     
   }
   /*
@@ -88,6 +92,44 @@ ruleset manage_sensors {
     Rules that create the sensor as a child, install the requisite rulesets into it, and then initialize its profile with default values. The sensor name is stored in the
     entity variable ent:sensors for identifying sensors by their subscription.
   */
+
+  rule getReports {
+    select when sensor ask_for_reports
+    pre {
+      reportID = random:uuid()
+      temperatureSensors = ent:sensors
+    }
+    always {
+      ent:reports :=  ent:reports.defaultsTo([]).append({
+        "report_id":reportID,
+        "temperature_sensors":temperatureSensors.length(),
+        "responding":0,
+        "temperatures": []
+      })
+      raise wrangler event "send_event_on_subs" attributes {
+        "domain":"sensor",
+        "type":"manager_wants_report",
+        "attrs":{
+          "report_id":  reportID
+        },
+        "Tx_role":"temperature_sensor"
+      }
+    }
+  }
+
+  rule receiveReport {
+    select when sensor report_received
+    pre {
+      report = event:attr("report")
+      reportID = event:attr("co_id")
+    }
+    always {
+      ent:reports := ent:reports.map(function(report){
+        report{"report_id"} != reportID => report | report.set(["responding"], report{"responding"} + 1)
+                                                          .set(["temperatures"], report{"temperatures"}.append(report))
+      })
+    }
+  }
   
   rule create_sensor {
     select when sensor new_sensor

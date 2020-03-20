@@ -1,8 +1,8 @@
 ruleset temperature_store {
   meta {
-    use module io.picolabs.subscription alias subscription
-    
     shares __testing, inrange_temperatures, temperatures, threshold_violations, current_temperature
+    use module io.picolabs.subscription alias subscription
+    use module io.picolabs.wrangler alias wrangler
   }
   global {
     __testing = { "queries": [ { "name": "__testing" },
@@ -52,6 +52,32 @@ ruleset temperature_store {
         //:= ent:temperature_readings.defaultsTo({}).put([timestamp], temperature)
       }
   }
+
+  rule receiveReportRequestFromManager {
+    select when sensor manager_wants_report
+    pre {
+      targetManagerSub = subscription:established().filter(function(sub){
+                                                  sub{"Rx"} == meta:eci
+                                                }).head()
+    }
+    if targetManagerSub then
+    noop()
+    fired {
+      raise wrangler event "send_event_on_subs" attributes {
+        "domain":"sensor",
+        "type":"report_received",
+        "subID":targetManagerSub{"Id"},
+        "attrs": event:attrs.put({
+          "report":{
+            "sensorName":wrangler:myself(){"name"},
+            "temperature":current_temperature()
+          }
+        })
+      }
+    } else {
+      raise error event "could not find manager subscription"
+    }
+  }
   
   rule collect_threshold_violations {
     select when wovyn threshold_violation
@@ -62,33 +88,6 @@ ruleset temperature_store {
     fired {
         ent:temp_threshold_violations := ent:temp_threshold_violations.defaultsTo([]).append([stamped_temperature]) 
     }
-  }
-  
-  rule send_report {
-    select when sensor report_requested
-    pre {
-      eci = event:attr("Tx").klog("TX WAS: ")
-      relevant_sub = subscription:established().filter(function(value) {
-        value{"Tx"} == eci
-      })[0].klog("relevant sub is: ")
-      current_temperature = current_temperature()
-      Rx = relevant_sub{"Rx"}
-      report_id = event:attr("report_id")
-      
-    }
-    event:send({
-      "eci":eci,
-      "eid":"requested_report",
-      "domain":"sensor",
-      "type":"report_sent",
-      "attrs":{
-        "report":current_temperature,
-        "Rx":Rx,
-        "report_id":report_id,
-        "sensor_type":"temperature_sensor"
-      }
-    })
-    
   }
   
   rule clear_temperatures {

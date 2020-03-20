@@ -1,0 +1,33 @@
+1. Can a sensor be in more than one collection based on the code you wrote? Why or why not? What are the implications of a sensor being in more than one collection? 
+
+Yes, the code I wrote chooses who to send a report back to depending on the meta:eci that it received the report request on, so it will only send it back to the manager pico who sent it.
+The manager pico also only stores reports from sensors whose report ID matches the ones it has asked for.
+
+2. How could you ensure that only certain picos can raise an event that causes a temperature report to be generated? 
+? You could use channel policies so that only channels that sensor picos have with  manager picos could raise a report generation event.
+
+3. How do the debug logs show that your scatter-gather system worked?
+This is just one example:
+[EPISODE_START] ck80s4ffe00fm4krq49yw8xq2 | event/NxRie47qfBKLaycFRYqHAm/ck80s4ffe00fl4krq4iki6y7f/sensor/manager_wants_report
+[DEBUG] ck80s4ffe00fm4krq49yw8xq2 | event received: sensor/manager_wants_report attributes {"report_id":"ck80s4fez00fk4krq6qdn60ok"}
+[DEBUG] ck80s4ffe00fm4krq49yw8xq2 | event added to pico queue: ck80rpblv008v4krqc37f8uck
+[EPISODE_START] ck80s4fff00fo4krqgowe5ym1 | event/QLioWWHVmz1n15Mi84QRnm/ck80s4fff00fn4krq10pph1zd/sensor/manager_wants_report
+[DEBUG] ck80s4fff00fo4krqgowe5ym1 | event received: sensor/manager_wants_report attributes {"report_id":"ck80s4fez00fk4krq6qdn60ok"}
+[DEBUG] ck80s4fff00fo4krqgowe5ym1 | event added to pico queue: ck80rr024009j4krq12rsgeva
+[EPISODE_START] ck80s4ffg00fq4krq4uqx48c2 | event/D8QZgYc1zk3sbKWdPqoxDk/ck80s4ffg00fp4krq51n1giza/sensor/manager_wants_report
+[DEBUG] ck80s4ffg00fq4krq4uqx48c2 | event received: sensor/manager_wants_report attributes {"report_id":"ck80s4fez00fk4krq6qdn60ok"}
+[DEBUG] ck80s4ffg00fq4krq4uqx48c2 | event added to pico queue: ck80rr0yq009x4krqamz1252n
+[EPISODE_START] ck80s4ffg00fs4krqek6ce0pp | event/ToXE1tBf1ZDohnM5oey13N/ck80s4ffg00fr4krq16tdbggr/sensor/manager_wants_report
+[DEBUG] ck80s4ffg00fs4krqek6ce0pp | event received: sensor/manager_wants_report attributes {"report_id":"ck80s4fez00fk4krq6qdn60ok"}
+[DEBUG] ck80s4ffg00fs4krqek6ce0pp | event added to pico queue: ck80s2slu00e54krqctm46g2o
+
+These logs are all subsequent. Each sensor pico received a "manager_wants_report" event in quick succession. Clearly, the manager pico is
+not waiting for a synchronous response for each pico but actually sending out an asynchronous event with which the sensor picos will respond to.
+
+4. How can you know a report is done and all the sensors that are going to respond have reported? 
+By finding the difference between the value of "responding" and the actual number of sensors the manager has recorded.
+
+5. Given your answer above, how would you recover if the number of responding sensors is less than the total number of sensors? 
+
+If a sensor continually does not respond, we could take some action, like check that sensor physically or remove that sensor from
+the list of our managed sensors, assuming it is broken/gone.
