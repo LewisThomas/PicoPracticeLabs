@@ -1,0 +1,47 @@
+1. This lab uses a vector clock (Links to an external site.) algorithm to create unique message IDs based on a sequence number. Could we replace the sequence number with a timestamp? What are the advantages and disadvantages of such an approach?
+
+We could replace the sequence number with a time stamp, but then we would not be able to know if we lost any information. Since we know the 
+sequence number is contiguous, if we receive say, message 14 and haven't received message 12 and 13, we know we are missing 2 data points that
+definitely ocurred. This would also imply our "seen" table is different. We would probably use instead the latest timestamp we've received for each node,
+and each node when receiving a seen message would send everything they have after that sent timestamp.
+
+2. Are the temperature messages in order? Why or why not? If not, what could you do to fix this?
+
+Yes they are, although this is just a quirk of KRL maps being ordered under-the-hood. Nothing in the system inherently reorders nodes,
+so if say a rumor message was dropped in a more unreliable system, it is possible some messages could get out of order and they would
+be recorded that way. Using an array to store the nodes could be one way to ensure the messages are always ordered, or using ordered
+keys in the map.
+
+3. How did you avoid looping (sending messages back to someone who already has it)? Why was the unique ID helpful?
+
+Each node maintains a list of what it knows all the other nodes have seen. This is propagated through the "seen" messages. The unique 
+ID allowed for each node to easily store the highest number of the message that the corresponding node had seen, so it could send a message
+the other node actually wanted.
+
+4. The propagation algorithm sleeps for n seconds between each iteration. What are the trade-offs between a low and high value for n.
+
+A low value of n will have more frequent message traffic but the messages themselves will end up smaller. Also, each node in the network
+will tend to be more up-to-date with a higher valuer for n, as they are communicating more often.
+With a higher value of n, the message traffic will be less, but the temperature sensors will be recording at the same rate. Thus, the message
+traffic will be less frequent and more "bursty". That is, since nodes will be more out of date, when they send a seen message to a neighbor and
+get updated, they might be sent a lot more data.
+
+5. Did new messages eventually end on all the nodes that were connected? Were the messages displayed in the same order on each node? Why or why not?
+
+Yes. Yes. The messages were displayed in order just because again the way KRL maps work is an under-the-hood alphabetical ordering, so each node
+does display the messages and each node in the same order. However, this doesn't mean the messages were all received in that order.
+
+6. Why does temporarily disconnecting a node from the network not result in permanent gaps in the messages seen at that node?
+
+Because when a node is brought back into the network when it sends a "seen" message it will receive everything its neighbor nodes know anyway,
+filling in the gaps. In the gossip network, there is basically a "collective" knowledge that all the nodes share, so even if all but one of the nodes
+disconnect and reconnect, everyone will get back up to date with no missing messages.
+
+7. Describe, in a paragraph or two, how you could use the basic scheme implemented here to add failure detection to the system using a reachability table.
+
+Each node could internally record a table of the nodes it has been receiving messages from for a period of time. If a node fails to receive a message
+from its neighbors within a certain amount of time, it could update that table so that it records that neighbor as having "failed". This table could
+then be shared in the same manner as the "seen" messages are shared, by messaging it to other nodes. That way, all the nodes will eventually learn
+the reachability tables of all the other nodes in the system. If a node fails to send messages and participate in the network, all the nodes would
+eventually learn about it, and so access to any node could report the failure of that node and some action by that node or user interfacing with that node
+could be taken.
